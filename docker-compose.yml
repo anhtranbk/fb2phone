@@ -1,0 +1,49 @@
+version: '3.5'
+services:
+  db:
+    image: postgres:11-alpine
+    environment:
+      POSTGRES_USER: fb2phone
+      POSTGRES_DB: fb2phone
+      POSTGRES_PASSWORD: fb2phone
+    ports:
+      - '127.0.0.1:15432:5432'
+    volumes:
+      - /data/fb2phone/postgres:/var/lib/postgresql/data
+  redis:
+    image: 'redis:alpine'
+    ports:
+      - '127.0.0.1:16379:6379'
+  worker:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    command: ./bin/docker-worker
+    environment:
+      DATABASE_URL: 'postgres://fb2phone:fb2phone@db:5432/fb2phone'
+      REDIS_URL: 'redis://redis:6379/'
+      SECRET_KEY: 'KXRG6aoptJF92Lrw6AFY7J5TxbnvkN'
+      DEBUG: 0
+      CONN_MAX_AGE: 0
+      LOG_LEVEL: 'WARNING'
+    depends_on:
+      - web
+  web:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    command: ./bin/docker-web
+    ports:
+      - '8000:8000'
+      - '8234:8234'
+    environment:
+      DATABASE_URL: 'postgres://fb2phone:fb2phone@db:5432/fb2phone'
+      REDIS_URL: 'redis://redis:6379/'
+      SECRET_KEY: 'KXRG6aoptJF92Lrw6AFY7J5TxbnvkN'
+      DEBUG: 0
+      CONN_MAX_AGE: 0
+      LOG_LEVEL: 'WARNING'
+      BACKEND_WORKERS: 8
+    depends_on:
+      - db
+      - redis
