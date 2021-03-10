@@ -9,12 +9,37 @@ https://docs.djangoproject.com/en/3.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
-
+import os
+from distutils.util import strtobool
 from pathlib import Path
+from typing import Optional, Callable, Any, List
+
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
+
+
+def get_from_env(key: str, default: Any = None, *, optional: bool = False, type_cast: Optional[Callable] = None) -> Any:
+    value = os.getenv(key)
+    if value is None:
+        if optional:
+            return None
+        if default is not None:
+            return default
+        else:
+            raise ImproperlyConfigured(f'The environment variable "{key}" is required to run PostHog!')
+    if type_cast is not None:
+        return type_cast(value)
+    return value
+
+
+def get_list(text: str) -> List[str]:
+    if not text:
+        return []
+    return [item.strip() for item in text.split(",")]
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
@@ -23,10 +48,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'q$0n^c4bfjo3x$nqm(c+i$lp7w=ld8yf@*452rq2&f(d3*m*hp'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = get_from_env("DEBUG", False, type_cast=strtobool)
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = get_list(os.getenv("ALLOWED_HOSTS", "*"))
 
 # Application definition
 
@@ -69,17 +93,31 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'fb2phone.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if DEBUG:
+    DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://fb2phone:fb2phone@localhost:5432/fb2phone")
+else:
+    DATABASE_URL = os.getenv("DATABASE_URL", "")
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=int(os.environ.get("CONN_MAX_AGE", "0")))
     }
-}
-
+else:
+    DATABASES = {
+        'default': {
+            "ENGINE": "django.db.backends.postgresql_psycopg2",
+            "NAME": get_from_env("FB2PHONE_DB_NAME"),
+            "USER": os.getenv("FB2PHONE_DB_USER", "postgres"),
+            "PASSWORD": os.getenv("FB2PHONE_DB_PASSWORD", ""),
+            "HOST": os.getenv("FB2PHONE_POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("FB2PHONE_POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.environ.get("CONN_MAX_AGE", "0")),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
@@ -99,7 +137,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
@@ -113,8 +150,34 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "frontend/dist"),
+]
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Authentication and user model
+AUTH_USER_MODEL = "posthog.User"
+AUTO_LOGIN = get_from_env("AUTO_LOGIN", False, type_cast=strtobool)
+LOGIN_URL = "/login"
+LOGOUT_URL = "/logout"
+LOGIN_REDIRECT_URL = "/"
+APPEND_SLASH = False
+CORS_URLS_REGEX = r"^/api/.*$"
+
+# Logging
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler", }, },
+    "root": {"handlers": ["console"], "level": os.getenv("DJANGO_LOG_LEVEL", "WARNING")},
+    "loggers": {
+        "django": {"handlers": ["console"], "level": os.getenv("DJANGO_LOG_LEVEL", "WARNING"), "propagate": True, },
+        "axes": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "statsd": {"handlers": ["console"], "level": "WARNING", "propagate": True, },
+    },
+}
