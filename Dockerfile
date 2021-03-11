@@ -16,4 +16,4 @@ RUN pip install -U pip
 RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
 # Run run.sh when the container launches
-CMD ["bash", "entrypoint.sh"]
+CMD ["bash", "/bin/docker-web"]

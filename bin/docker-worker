@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+# this kills all processes when the last one terminates
+trap 'kill $(jobs -p)' EXIT
+
+celery -A fb2phone worker -B --without-heartbeat --without-gossip --without-mingle

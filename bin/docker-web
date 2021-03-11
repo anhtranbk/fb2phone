@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+if [ "${ENABLE_AUTO_MIGRATION}" = 1 ]; then
+  python manage.py migrate
+fi
+
+gunicorn posthog.wsgi \
+    --config gunicorn.config.py \
+    --bind 0.0.0.0:8080 \
+    --log-file - \
+    --log-level "${GUNICORN_LOG_LEVEL:-info}" \
+    --worker-tmp-dir /dev/shm \
+    --workers="${BACKEND_WORKERS:-1}" \
+    --worker-class=gevent
