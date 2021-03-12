@@ -10,9 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 import os
+import shutil
+import sys
 from distutils.util import strtobool
 from pathlib import Path
-from typing import Optional, Callable, Any, List
+from typing import Optional, Callable, Any, List, Sequence
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -38,6 +40,11 @@ def get_list(text: str) -> List[str]:
     return [item.strip() for item in text.split(",")]
 
 
+def print_warning(warning_lines: Sequence[str]):
+    highlight_length = min(max(map(len, warning_lines)) // 2, shutil.get_terminal_size().columns)
+    print("\n".join(("", "🔻" * highlight_length, *warning_lines, "🔺" * highlight_length, "",)), file=sys.stderr)
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,10 +52,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'q$0n^c4bfjo3x$nqm(c+i$lp7w=ld8yf@*452rq2&f(d3*m*hp'
+DEFAULT_SECRET_KEY = 'q$0n^c4bfjo3x$nqm(c+i$lp7w=ld8yf@*452rq2&f(d3*m*hp'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = get_from_env("DEBUG", False, type_cast=strtobool)
+
+if not DEBUG and SECRET_KEY == DEFAULT_SECRET_KEY:
+    print_warning(
+        (
+            "You are using the default SECRET_KEY in a production environment!",
+            "For the safety of your instance, you must generate and set a unique key.",
+            "More information on https://posthog.com/docs/deployment/securing-posthog#secret-key",
+        )
+    )
+    sys.exit("[ERROR] Default SECRET_KEY in production. Stopping Django server…\n")
 
 ALLOWED_HOSTS = get_list(os.getenv("ALLOWED_HOSTS", "*"))
 
